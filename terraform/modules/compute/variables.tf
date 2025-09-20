@@ -1,0 +1,10 @@
+variable "project_name" { type = string }
+variable "environment" { type = string }
+variable "deployment_target" { type = string }
+variable "vpc_id" { type = string }
+variable "private_subnet_ids" { type = list(string) }
+variable "public_subnet_ids" { type = list(string) }
+variable "security_group_id" { type = string }
+variable "jenkins_instance_id" { type = string }
+variable "alb_target_group_arn" { type = string }
+variable "aws_region" { type = string }

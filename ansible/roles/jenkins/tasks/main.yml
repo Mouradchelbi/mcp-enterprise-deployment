@@ -1,0 +1,60 @@
+---
+- name: Ensure Java is installed
+  package:
+    name: java-11-openjdk
+    state: present
+  become: yes
+
+- name: Ensure Git is installed
+  package:
+    name: git
+    state: present
+  become: yes
+
+- name: Install AWS CLI v2
+  unarchive:
+    src: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+    dest: /tmp
+    remote_src: yes
+  become: yes
+
+- name: Install AWS CLI
+  command: /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+  become: yes
+
+- name: Ensure Jenkins repository is added
+  get_url:
+    url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+    dest: /etc/yum.repos.d/jenkins.repo
+  become: yes
+
+- name: Import Jenkins GPG key
+  rpm_key:
+    key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+    state: present
+  become: yes
+
+- name: Install Jenkins
+  package:
+    name: jenkins
+    state: present
+  become: yes
+  notify: Start Jenkins
+
+- name: Install Jenkins plugins
+  command: >
+    java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar \
+    -s http://localhost:8080 install-plugin {{ item }}
+  loop:
+    - git
+    - aws-credentials
+    - kubernetes
+  become: yes
+  ignore_errors: true
+
+- name: Install kubectl
+  get_url:
+    url: "https://dl.k8s.io/release/{{ lookup('pipe', 'curl -L -s https://dl.k8s.io/release/stable.txt') }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: '0755'
+  become: yes

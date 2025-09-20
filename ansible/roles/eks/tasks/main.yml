@@ -1,0 +1,23 @@
+---
+- name: Fetch DB credentials from Secrets Manager
+  command: >
+    aws secretsmanager get-secret-value \
+      --secret-id {{ database_secret }} \
+      --region {{ aws_region }}
+  register: secret_result
+  environment:
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+- name: Parse DB credentials
+  set_fact:
+    db_credentials: "{{ (secret_result.stdout | from_json).SecretString | from_json }}"
+
+- name: Generate EKS deployment manifest
+  template:
+    src: deployment.yaml.j2
+    dest: /tmp/mcp-server-deployment.yaml
+
+- name: Apply EKS deployment
+  command: >
+    kubectl apply -f /tmp/mcp-server-deployment.yaml \
+      --namespace {{ environment }}

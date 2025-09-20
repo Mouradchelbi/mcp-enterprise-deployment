@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  mcp-server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/testdb
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - mcp-network
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=testdb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mcp-network
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcp-network
+networks:
+  mcp-network:
+    driver: bridge
+volumes:
+  postgres-data:
+  redis-data:

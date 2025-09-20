@@ -1,0 +1,25 @@
+---
+- name: Deploy MCP Server on EKS
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    environment: "{{ env | default('dev') }}"
+    task: "{{ task | default('all') }}"
+    ecr_registry: "{{ lookup('env', 'ECR_REGISTRY') }}"
+    ecr_repository: "{{ lookup('env', 'ECR_REPOSITORY') }}"
+    git_commit: "{{ lookup('env', 'GIT_COMMIT') }}"
+    aws_region: "{{ lookup('env', 'AWS_DEFAULT_REGION') }}"
+    rds_endpoint: "{{ rds_endpoint | default('') }}"
+    redis_endpoint: "{{ redis_endpoint | default('') }}"
+  tasks:
+    - name: Configure Jenkins
+      include_role:
+        name: jenkins
+      when: task == "jenkins_config" or task == "all"
+    - name: Prepare EKS
+      include_role:
+        name: eks
+      vars:
+        database_secret: "mcp-server-jenkins-ansible-key-{{ environment }}"
+      when: task == "prepare_eks" or task == "all"

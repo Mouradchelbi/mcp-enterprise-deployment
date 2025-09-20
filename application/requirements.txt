@@ -1,0 +1,5 @@
+fastmcp==0.1.0
+psycopg2-binary==2.9.9
+redis==5.0.1
+structlog==24.1.0
+python-json-logger==2.0.7

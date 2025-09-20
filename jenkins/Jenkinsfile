@@ -1,0 +1,160 @@
+pipeline {
+    agent any
+    
+    environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+        AWS_ACCOUNT_ID = '685939060042'
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        ECR_REPOSITORY = 'mcp-server-${ENVIRONMENT}'
+        EKS_CLUSTER = 'mcp-server-eks-cluster'
+    }
+    
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'staging', 'prod'],
+            description: 'Select deployment environment'
+        )
+        booleanParam(
+            name: 'UPDATE_JENKINS',
+            defaultValue: false,
+            description: 'Update Jenkins server configuration?'
+        )
+        booleanParam(
+            name: 'DESTROY_INFRASTRUCTURE',
+            defaultValue: false,
+            description: 'Destroy infrastructure?'
+        )
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "��� Checking out code..."
+            }
+        }
+        
+        stage('Code Quality') {
+            steps {
+                sh '''
+                    cd application
+                    python3 -m pip install flake8
+                    flake8 . --max-line-length=88
+                '''
+            }
+        }
+        
+        stage('Terraform: Plan') {
+            when { not { expression { params.DESTROY_INFRASTRUCTURE } } }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-moudevops-access-key'
+                ]]) {
+                    sh '''
+                        cd terraform/environments/${ENVIRONMENT}
+                        terraform init
+                        terraform plan -out=tfplan -var="deployment_target=eks"
+                    '''
+                }
+            }
+        }
+        
+        stage('Terraform: Apply') {
+            when { not { expression { params.DESTROY_INFRASTRUCTURE } } }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-moudevops-access-key'
+                ]]) {
+                    sh '''
+                        cd terraform/environments/${ENVIRONMENT}
+                        terraform apply -auto-approve tfplan
+                    '''
+                }
+            }
+        }
+        
+        stage('Ansible: Update Jenkins') {
+            when { expression { params.UPDATE_JENKINS } }
+            steps {
+                sh '''
+                    cd ansible
+                    ansible-playbook -i inventories/${ENVIRONMENT}/hosts playbooks/deploy-mcp-server.yml                         -e "environment=${ENVIRONMENT} task=jenkins_config"
+                '''
+            }
+        }
+        
+        stage('Build and Push Docker Image') {
+            when { not { expression { params.DESTROY_INFRASTRUCTURE } } }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-moudevops-access-key'
+                ]]) {
+                    sh '''
+                        aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        cd application
+                        docker build -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:${GIT_COMMIT} .
+                        docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${GIT_COMMIT}
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy to EKS') {
+            when { not { expression { params.DESTROY_INFRASTRUCTURE } } }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-moudevops-access-key'
+                ]]) {
+                    sh '''
+                        cd terraform/environments/${ENVIRONMENT}
+                        aws eks update-kubeconfig --region ${AWS_DEFAULT_REGION} --name ${EKS_CLUSTER}-${ENVIRONMENT}
+                        cd ../../..
+                        cd ansible
+                        ansible-playbook -i inventories/${ENVIRONMENT}/hosts playbooks/deploy-mcp-server.yml                             -e "environment=${ENVIRONMENT} task=prepare_eks"                             -e "ecr_registry=${ECR_REGISTRY}"                             -e "ecr_repository=${ECR_REPOSITORY}"                             -e "git_commit=${GIT_COMMIT}"                             -e "aws_region=${AWS_DEFAULT_REGION}"                             -e "rds_endpoint=[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mNo outputs found[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe state file either has no outputs defined, or all the defined outputs are empty. Please define an output in your configuration with
+[33m│[0m [0mthe `output` keyword and run `terraform refresh` for it to become available. If you are using interpolation, please verify the
+[33m│[0m [0minterpolated value is not empty. You can use the `terraform console` command to assist.
+[33m╵[0m[0m"                             -e "redis_endpoint=[33m╷[0m[0m
+[33m│[0m [0m[1m[33mWarning: [0m[0m[1mNo outputs found[0m
+[33m│[0m [0m
+[33m│[0m [0m[0mThe state file either has no outputs defined, or all the defined outputs are empty. Please define an output in your configuration with
+[33m│[0m [0mthe `output` keyword and run `terraform refresh` for it to become available. If you are using interpolation, please verify the
+[33m│[0m [0minterpolated value is not empty. You can use the `terraform console` command to assist.
+[33m╵[0m[0m"
+                    '''
+                }
+            }
+        }
+        
+        stage('Terraform: Destroy') {
+            when { expression { params.DESTROY_INFRASTRUCTURE } }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-moudevops-access-key'
+                ]]) {
+                    input message: "Destroy ${ENVIRONMENT} infrastructure?", ok: 'Yes'
+                    sh '''
+                        cd terraform/environments/${ENVIRONMENT}
+                        terraform destroy -auto-approve
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "✅ Pipeline completed successfully"
+        }
+        failure {
+            echo "❌ Pipeline failed"
+        }
+    }
+}

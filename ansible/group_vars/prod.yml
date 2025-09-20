@@ -1,0 +1,5 @@
+app_replicas: 3
+app_cpu: 1024
+app_memory: 2048
+project_name: mcp-server
+aws_region: us-east-1
