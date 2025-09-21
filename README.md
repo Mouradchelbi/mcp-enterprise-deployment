@@ -1,16 +1,16 @@
 # MCP Server Enterprise Deployment (EKS)
 
-This project deploys the MCP Server on AWS EKS in private subnets, reusing an existing VPC (`vpc-07f7af107dca845ac`) and Jenkins server (`44.195.143.19:8080`) in a public subnet for CI/CD and Ansible connections. It includes ALB (public subnets), RDS (PostgreSQL, private subnets), ElastiCache (Redis, private subnets), Secrets Manager for credentials, and Route 53 DNS records.
+This project deploys the MCP Server on AWS EKS in private subnets, reusing an existing VPC (`vpc-07xxxxxxxxac`) and Jenkins server (`xx.xx.xx.xx:8080`) in a public subnet for CI/CD and Ansible connections. It includes ALB (public subnets), RDS (PostgreSQL, private subnets), ElastiCache (Redis, private subnets), Secrets Manager for credentials, and Route 53 DNS records.
 
 ## Existing Infrastructure
 - **VPC**: `vpc-07f7af107dca845ac` (multi-AZ, public/private subnets).
-- **Security Group**: `sg-0174a494e2ae5db05` (updated for Jenkins communication).
-- **Jenkins Server**: `44.195.143.19` (instance ID: `i-0f42ea74f084b917b`, user: `ec2-user`, type: t3.large) in public subnet.
+- **Security Group**: `sg-0174xxxxxxxx` (updated for Jenkins communication).
+- **Jenkins Server**: `xx.xx.xx.xx` (instance ID: `i-0f42xxxxxxxxxxx`, user: `ec2-user`, type: t3.large) in public subnet.
 - **IAM User**: `arn:aws:iam::685939060042:user/mcp-server-cpm-user-dev` for Terraform operations.
 
 ## Prerequisites
 - AWS credentials (`aws-moudevops-access-key`) in Jenkins with IAM user permissions.
-- Jenkins server at `http://44.195.143.19:8080` with Ansible, AWS CLI, `kubectl`.
+- Jenkins server at `http://xx.xx.xx.xx:8080` with Ansible, AWS CLI, `kubectl`.
 - SSH access to Jenkins for Ansible (update key in `ansible/inventories/`).
 - Actual public/private subnet IDs in `terraform/environments/*/variables.tf`.
 - Route 53 hosted zone ID for DNS records.
@@ -49,12 +49,12 @@ Example output for `dev`:
 environment_summary = {
   aws_region = "us-east-1"
   environment = "dev"
-  instance_id = "i-0f42ea74f084b917b"
+  instance_id = "i-0f42xxxxxxxxxxx"
   instance_type = "t3.large"
-  jenkins_url = "http://44.195.143.19:8080"
+  jenkins_url = "http://xx.xx.xx.xx:8080"
   project_name = "mcp-server"
-  public_ip = "44.195.143.19"
-  security_group_id = "sg-0174a494e2ae5db05"
+  public_ip = "xx.xx.xx.xx"
+  security_group_id = "sg-017xxxxxxxxxxxx"
   vpc_id = "vpc-07f7af107dca845ac"
   eks_cluster_endpoint = "https://..."
   rds_endpoint = "..."
