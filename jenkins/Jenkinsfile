@@ -90,11 +90,8 @@ pipeline {
                             aws s3api put-bucket-versioning \
                                 --bucket mcp-server-terraform-state-dev \
                                 --versioning-configuration Status=Enabled
-                                
-                            # Enable encryption
-                            aws s3api put-bucket-encryption \
-                                --bucket mcp-server-terraform-state-dev \
-                                --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+                            
+                            echo "S3 bucket created with versioning enabled"
                         else
                             echo "S3 bucket already exists"
                         fi
