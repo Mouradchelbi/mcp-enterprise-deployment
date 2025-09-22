@@ -90,6 +90,7 @@ module "compute" {
   project_name         = var.project_name
   environment          = var.environment
   deployment_target    = var.deployment_target
+  aws_region           = var.aws_region
   vpc_id               = data.aws_vpc.existing.id
   private_subnet_ids   = data.aws_subnets.private.ids
   public_subnet_ids    = data.aws_subnets.public.ids
