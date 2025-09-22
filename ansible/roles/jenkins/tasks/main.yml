@@ -1,14 +1,16 @@
 ---
 - name: Ensure Java is installed
-  package:
-    name: java-11-openjdk
+  apt:
+    name: openjdk-11-jdk
     state: present
+    update_cache: yes
   become: yes
 
 - name: Ensure Git is installed
-  package:
+  apt:
     name: git
     state: present
+    update_cache: yes
   become: yes
 
 - name: Install AWS CLI v2
@@ -24,18 +26,23 @@
 
 - name: Ensure Jenkins repository is added
   get_url:
-    url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
-    dest: /etc/yum.repos.d/jenkins.repo
+    url: https://pkg.jenkins.io/debian-stable/jenkins.list
+    dest: /etc/apt/sources.list.d/jenkins.list
   become: yes
 
 - name: Import Jenkins GPG key
-  rpm_key:
-    key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+  apt_key:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
     state: present
   become: yes
 
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: yes
+
 - name: Install Jenkins
-  package:
+  apt:
     name: jenkins
     state: present
   become: yes
@@ -43,8 +50,7 @@
 
 - name: Install Jenkins plugins
   command: >
-    java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar \
-    -s http://localhost:8080 install-plugin {{ item }}
+    java -jar /usr/share/java/jenkins.war --httpPort=8080 --prefix=/ install-plugin {{ item }}
   loop:
     - git
     - aws-credentials
