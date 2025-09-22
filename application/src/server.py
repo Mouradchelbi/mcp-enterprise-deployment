@@ -20,21 +20,29 @@ mcp = FastMCP()
 db_conn = psycopg2.connect(os.getenv("DATABASE_URL"))
 redis_client = redis.Redis.from_url(os.getenv("REDIS_URL"))
 
+
 @mcp.route("/lookup_customer")
 async def lookup_customer(customer_id=None, email=None):
     logger = structlog.get_logger()
     logger.info("Looking up customer", customer_id=customer_id, email=email)
     with db_conn.cursor() as cur:
         if customer_id:
-            cur.execute("SELECT id, name, email FROM customers WHERE id = %s", (customer_id,))
+            cur.execute(
+                "SELECT id, name, email FROM customers WHERE id = %s",
+                (customer_id,)
+            )
         elif email:
-            cur.execute("SELECT id, name, email FROM customers WHERE email = %s", (email,))
+            cur.execute(
+                "SELECT id, name, email FROM customers WHERE email = %s",
+                (email,)
+            )
         else:
             return {"error": "Customer ID or email required"}
         result = cur.fetchone()
         if result:
             return {"id": result[0], "name": result[1], "email": result[2]}
         return {"error": "Customer not found"}
+
 
 @mcp.route("/health")
 async def health_check():
@@ -45,6 +53,7 @@ async def health_check():
         return {"status": "OK"}
     except Exception as e:
         return {"status": "ERROR", "error": str(e)}
+
 
 if __name__ == "__main__":
     mcp.run(host="0.0.0.0", port=8000)
