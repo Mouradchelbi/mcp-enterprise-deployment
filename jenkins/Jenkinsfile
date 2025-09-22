@@ -30,7 +30,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo "��� Checking out code..."
+                echo "🔄 Checking out code..."
             }
         }
         
@@ -70,6 +70,19 @@ pipeline {
                     sh '''
                         cd terraform/environments/${ENVIRONMENT}
                         terraform apply -auto-approve tfplan
+                        
+                        # Get outputs and store them
+                        echo "Getting Terraform outputs..."
+                        terraform output -json > terraform-outputs.json
+                        
+                        # Extract outputs safely (avoiding terminal color codes)
+                        RDS_ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null || echo "")
+                        REDIS_ENDPOINT=$(terraform output -raw redis_endpoint 2>/dev/null || echo "")
+                        
+                        echo "RDS_ENDPOINT=${RDS_ENDPOINT}" > ../../../terraform-vars.env
+                        echo "REDIS_ENDPOINT=${REDIS_ENDPOINT}" >> ../../../terraform-vars.env
+                        
+                        echo "Terraform outputs saved to terraform-vars.env"
                     '''
                 }
             }
@@ -80,7 +93,9 @@ pipeline {
             steps {
                 sh '''
                     cd ansible
-                    ansible-playbook -i inventories/${ENVIRONMENT}/hosts playbooks/deploy-mcp-server.yml                         -e "environment=${ENVIRONMENT} task=jenkins_config"
+                    ansible-playbook -i inventories/${ENVIRONMENT}/hosts playbooks/deploy-mcp-server.yml \
+                        -e "environment=${ENVIRONMENT}" \
+                        -e "task=jenkins_config"
                 '''
             }
         }
@@ -110,23 +125,22 @@ pipeline {
                     credentialsId: 'aws-moudevops-access-key'
                 ]]) {
                     sh '''
-                        cd terraform/environments/${ENVIRONMENT}
+                        # Update kubeconfig
                         aws eks update-kubeconfig --region ${AWS_DEFAULT_REGION} --name ${EKS_CLUSTER}-${ENVIRONMENT}
-                        cd ../../..
+                        
+                        # Load terraform outputs
+                        source terraform-vars.env
+                        
                         cd ansible
-                        ansible-playbook -i inventories/${ENVIRONMENT}/hosts playbooks/deploy-mcp-server.yml                             -e "environment=${ENVIRONMENT} task=prepare_eks"                             -e "ecr_registry=${ECR_REGISTRY}"                             -e "ecr_repository=${ECR_REPOSITORY}"                             -e "git_commit=${GIT_COMMIT}"                             -e "aws_region=${AWS_DEFAULT_REGION}"                             -e "rds_endpoint=[33m╷[0m[0m
-[33m│[0m [0m[1m[33mWarning: [0m[0m[1mNo outputs found[0m
-[33m│[0m [0m
-[33m│[0m [0m[0mThe state file either has no outputs defined, or all the defined outputs are empty. Please define an output in your configuration with
-[33m│[0m [0mthe `output` keyword and run `terraform refresh` for it to become available. If you are using interpolation, please verify the
-[33m│[0m [0minterpolated value is not empty. You can use the `terraform console` command to assist.
-[33m╵[0m[0m"                             -e "redis_endpoint=[33m╷[0m[0m
-[33m│[0m [0m[1m[33mWarning: [0m[0m[1mNo outputs found[0m
-[33m│[0m [0m
-[33m│[0m [0m[0mThe state file either has no outputs defined, or all the defined outputs are empty. Please define an output in your configuration with
-[33m│[0m [0mthe `output` keyword and run `terraform refresh` for it to become available. If you are using interpolation, please verify the
-[33m│[0m [0minterpolated value is not empty. You can use the `terraform console` command to assist.
-[33m╵[0m[0m"
+                        ansible-playbook -i inventories/${ENVIRONMENT}/hosts playbooks/deploy-mcp-server.yml \
+                            -e "environment=${ENVIRONMENT}" \
+                            -e "task=prepare_eks" \
+                            -e "ecr_registry=${ECR_REGISTRY}" \
+                            -e "ecr_repository=${ECR_REPOSITORY}" \
+                            -e "git_commit=${GIT_COMMIT}" \
+                            -e "aws_region=${AWS_DEFAULT_REGION}" \
+                            -e "rds_endpoint=${RDS_ENDPOINT}" \
+                            -e "redis_endpoint=${REDIS_ENDPOINT}"
                     '''
                 }
             }
@@ -150,6 +164,10 @@ pipeline {
     }
     
     post {
+        always {
+            // Clean up terraform vars file
+            sh 'rm -f terraform-vars.env'
+        }
         success {
             echo "✅ Pipeline completed successfully"
         }
