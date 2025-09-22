@@ -31,6 +31,17 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo "🔄 Checking out code..."
+                git branch: 'main', 
+                    credentialsId: 'github-credentials', // Use 'github-credentials' if private repo, remove this line if public
+                    url: 'https://github.com/Mouradchelbi/mcp-enterprise-deployment.git'
+                
+                // Display repository info
+                sh '''
+                    echo "Repository checked out successfully"
+                    echo "Current branch: $(git branch --show-current)"
+                    echo "Latest commit: $(git log -1 --oneline)"
+                    ls -la
+                '''
             }
         }
         
@@ -39,7 +50,7 @@ pipeline {
                 sh '''
                     cd application
                     python3 -m pip install flake8
-                    flake8 . --max-line-length=88
+                    python3 -m flake8 . --max-line-length=88
                 '''
             }
         }
