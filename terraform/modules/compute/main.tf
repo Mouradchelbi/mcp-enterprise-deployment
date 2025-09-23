@@ -25,10 +25,10 @@ resource "aws_eks_node_group" "main" {
     max_size     = 3
     min_size     = 1
   }
-  instance_types = ["t3.medium"]
-  remote_access {
-    ec2_ssh_key = "${var.project_name}-key-${var.environment}"
-  }
+  # instance_types = ["t3.medium"]
+  # remote_access {
+  #   ec2_ssh_key = "${var.project_name}-key-${var.environment}"
+  # }
 }
 
 resource "aws_eks_addon" "vpc_cni" {
@@ -60,10 +60,10 @@ resource "aws_iam_role" "eks_cluster" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  role       = aws_iam_role.eks_cluster.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
+# resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+#   role       = aws_iam_role.eks_cluster.name
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+# }
 
 resource "aws_iam_role" "eks_node" {
   name = "${var.project_name}-eks-node-role-${var.environment}"
