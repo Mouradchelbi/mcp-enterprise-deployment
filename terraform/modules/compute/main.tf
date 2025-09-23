@@ -2,6 +2,10 @@ data "aws_instance" "jenkins" {
   instance_id = var.jenkins_instance_id
 }
 
+data "aws_caller_identity" "current" {}
+
+
+
 resource "aws_eks_cluster" "main" {
   name     = "${var.project_name}-eks-cluster-${var.environment}"
   role_arn = aws_iam_role.eks_cluster.arn
@@ -102,12 +106,10 @@ resource "aws_iam_role_policy" "eks_secrets_access" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret"
         ]
-        data "aws_caller_identity" "current" {}
 
-      data "aws_instance" "jenkins" {
-      instance_id = var.jenkins_instance_id
-}
-      Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-jenkins-ansible-key-${var.environment}*"
+
+        
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-jenkins-ansible-key-${var.environment}*"
       }
     ]
   })
