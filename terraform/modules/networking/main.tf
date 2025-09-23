@@ -73,9 +73,8 @@ resource "aws_security_group_rule" "http_ingress" {
   security_group_id = var.security_group_id
   cidr_blocks       = ["0.0.0.0/0"]
   description       = "Allow HTTP to ALB"
-  lifecycle {
-    ignore_changes = all
-  }
+  
+  
 
   lifecycle {
     ignore_changes = all
