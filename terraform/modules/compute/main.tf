@@ -102,7 +102,12 @@ resource "aws_iam_role_policy" "eks_secrets_access" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret"
         ]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-jenkins-ansible-key-${var.environment}*"
+        data "aws_caller_identity" "current" {}
+
+      data "aws_instance" "jenkins" {
+      instance_id = var.jenkins_instance_id
+}
+      Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-jenkins-ansible-key-${var.environment}*"
       }
     ]
   })
