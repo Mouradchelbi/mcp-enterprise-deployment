@@ -4,8 +4,6 @@ data "aws_instance" "jenkins" {
 
 data "aws_caller_identity" "current" {}
 
-
-
 resource "aws_eks_cluster" "main" {
   name     = "${var.project_name}-eks-cluster-${var.environment}"
   role_arn = aws_iam_role.eks_cluster.arn
@@ -25,25 +23,26 @@ resource "aws_eks_node_group" "main" {
     max_size     = 3
     min_size     = 1
   }
-  # instance_types = ["t3.medium"]
-  # remote_access {
-  #   ec2_ssh_key = "${var.project_name}-key-${var.environment}"
-  # }
+  instance_types = ["t3.medium"]
+  # Removed remote_access to avoid key pair requirement
 }
 
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name = aws_eks_cluster.main.name
   addon_name   = "vpc-cni"
+  depends_on   = [aws_eks_node_group.main]
 }
 
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name = aws_eks_cluster.main.name
   addon_name   = "kube-proxy"
+  depends_on   = [aws_eks_node_group.main]
 }
 
 resource "aws_eks_addon" "coredns" {
   cluster_name = aws_eks_cluster.main.name
   addon_name   = "coredns"
+  depends_on   = [aws_eks_node_group.main]
 }
 
 resource "aws_iam_role" "eks_cluster" {
@@ -60,10 +59,10 @@ resource "aws_iam_role" "eks_cluster" {
   })
 }
 
-# resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-#   role       = aws_iam_role.eks_cluster.name
-#   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-# }
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
 
 resource "aws_iam_role" "eks_node" {
   name = "${var.project_name}-eks-node-role-${var.environment}"
@@ -84,10 +83,7 @@ resource "aws_iam_role_policy_attachment" "eks_node_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  role       = aws_iam_role.eks_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSCNIPolicy"
-}
+# Removed deprecated AmazonEKSCNIPolicy
 
 resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
   role       = aws_iam_role.eks_node.name
@@ -106,37 +102,10 @@ resource "aws_iam_role_policy" "eks_secrets_access" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret"
         ]
-
-
-        
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-jenkins-ansible-key-${var.environment}*"
       }
     ]
   })
 }
 
-# Kubernetes Service to expose application
-resource "kubernetes_service" "mcp_server" {
-  metadata {
-    name      = "${var.project_name}-service"
-    namespace = var.environment
-  }
-  spec {
-    selector = {
-      app = "${var.project_name}"
-    }
-    port {
-      port        = 8000
-      target_port = 8000
-    }
-    type = "ClusterIP"
-  }
-  depends_on = [aws_eks_cluster.main]
-}
-
-# Attach service to ALB
-resource "aws_lb_target_group_attachment" "mcp_server" {
-  target_group_arn = var.alb_target_group_arn
-  target_id        = kubernetes_service.mcp_server.spec[0].cluster_ip
-  port             = 8000
-}
+# Removed Kubernetes resources - will be handled by Ansible
