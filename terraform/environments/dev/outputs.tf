@@ -6,7 +6,7 @@ output "environment_summary" {
     project_name        = var.project_name
     vpc_id              = data.aws_vpc.existing.id
     public_subnet_ids   = data.aws_subnets.public.ids
-    private_subnet_ids  = data.aws_subnets.private.ids
+    private_subnet_ids  = aws_subnet.private[*].id
     security_group_id   = var.security_group_id
     jenkins = {
       instance_id   = var.jenkins_instance_id
