@@ -1,37 +1,27 @@
 # NAT Gateway for private subnet outbound traffic
 resource "aws_eip" "nat" {
-  count = length(var.azs)
+  count = length(var.public_subnet_ids)
   domain = "vpc"
   tags = {
-    Name = "${var.project_name}-nat-eip-${var.environment}-${count.index}"
+    Name = "${var.project_name}-nat-eip-${var.environment}-${count.index + 1}"
   }
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = length(var.azs)
+  count         = length(var.public_subnet_ids)
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = var.public_subnet_ids[count.index]
   tags = {
-    Name = "${var.project_name}-nat-${var.environment}-${count.index}"
+    Name = "${var.project_name}-nat-${var.environment}-${count.index + 1}"
   }
 }
 
-resource "aws_route_table" "private" {
-  count  = length(var.azs)
-  vpc_id = var.vpc_id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
-  tags = {
-    Name = "${var.project_name}-private-rt-${var.environment}-${count.index}"
-  }
-}
-
-resource "aws_route_table_association" "private" {
-  count          = length(var.private_subnet_ids)
-  subnet_id      = var.private_subnet_ids[count.index]
-  route_table_id = aws_route_table.private[count.index % length(var.azs)].id
+# Add route to NAT Gateway in existing private route tables
+resource "aws_route" "private_nat" {
+  count                  = length(var.private_route_table_ids)
+  route_table_id         = var.private_route_table_ids[count.index]
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main[count.index % length(aws_nat_gateway.main)].id
 }
 
 # Security Group Rules

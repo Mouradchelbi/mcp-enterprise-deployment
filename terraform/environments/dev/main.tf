@@ -57,15 +57,42 @@ data "aws_subnets" "public" {
   }
 }
 
-data "aws_subnets" "private" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.existing.id]
+# Create Private Subnets
+resource "aws_subnet" "private" {
+  count             = 2
+  vpc_id            = data.aws_vpc.existing.id
+  cidr_block        = "10.0.${count.index + 20}.0/24"  # Using 10.0.20.0/24, 10.0.21.0/24
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Name        = "mcp-server-private-subnet-${count.index + 1}-${var.environment}"
+    Type        = "Private"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+    Purpose     = "Application-Infrastructure"
+    Owner       = var.owner
   }
-  filter {
-    name   = "tag:Type"
-    values = ["Private"]
+}
+
+# Create Route Tables for Private Subnets
+resource "aws_route_table" "private" {
+  count  = 2
+  vpc_id = data.aws_vpc.existing.id
+
+  tags = {
+    Name        = "mcp-server-private-rt-${count.index + 1}-${var.environment}"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
   }
+}
+
+# Associate Private Subnets with Route Tables
+resource "aws_route_table_association" "private" {
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
 }
 
 # Networking module (ALB, NAT Gateway, Route 53)
@@ -75,13 +102,14 @@ module "networking" {
   environment       = var.environment
   vpc_id            = data.aws_vpc.existing.id
   public_subnet_ids = data.aws_subnets.public.ids
-  private_subnet_ids = data.aws_subnets.private.ids
+  private_subnet_ids = aws_subnet.private[*].id  # Use created private subnets
   security_group_id = data.aws_security_group.existing.id
-  azs               = data.aws_availability_zones.available.names
+  azs               = [data.aws_availability_zones.available.names[0], data.aws_availability_zones.available.names[1]]  # Limit to 2 AZs
   route53_zone_id   = var.route53_zone_id
   alb_subdomain     = var.alb_subdomain
   jenkins_subdomain = var.jenkins_subdomain
   jenkins_public_ip = data.aws_instance.jenkins.public_ip
+  private_route_table_ids = aws_route_table.private[*].id  # Pass route table IDs
 }
 
 # Compute module (EKS)
@@ -92,7 +120,7 @@ module "compute" {
   deployment_target    = var.deployment_target
   aws_region           = var.aws_region
   vpc_id               = data.aws_vpc.existing.id
-  private_subnet_ids   = data.aws_subnets.private.ids
+  private_subnet_ids   = aws_subnet.private[*].id  # Use created private subnets
   public_subnet_ids    = data.aws_subnets.public.ids
   security_group_id    = data.aws_security_group.existing.id
   jenkins_instance_id  = data.aws_instance.jenkins.instance_id
@@ -105,7 +133,7 @@ module "database" {
   project_name         = var.project_name
   environment          = var.environment
   vpc_id               = data.aws_vpc.existing.id
-  private_subnet_ids   = data.aws_subnets.private.ids
+  private_subnet_ids   = aws_subnet.private[*].id  # Use created private subnets
   security_group_id    = data.aws_security_group.existing.id
 }
 
@@ -115,7 +143,7 @@ module "cache" {
   project_name         = var.project_name
   environment          = var.environment
   vpc_id               = data.aws_vpc.existing.id
-  private_subnet_ids   = data.aws_subnets.private.ids
+  private_subnet_ids   = aws_subnet.private[*].id  # Use created private subnets
   security_group_id    = data.aws_security_group.existing.id
 }
 
