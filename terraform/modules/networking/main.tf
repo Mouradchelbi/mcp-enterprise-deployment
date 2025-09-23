@@ -82,6 +82,28 @@ resource "aws_security_group_rule" "http_ingress" {
   }
 }
 
+
+
+# Add egress rules for EKS worker nodes
+resource "aws_security_group_rule" "eks_worker_egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  security_group_id = var.security_group_id
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "Allow all egress for EKS worker nodes"
+}
+
+resource "aws_security_group_rule" "eks_worker_egress_cluster" {
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = var.security_group_id
+  source_security_group_id = var.security_group_id
+  description              = "Allow worker nodes to communicate with cluster"
+}
 # ALB
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb-${var.environment}"
