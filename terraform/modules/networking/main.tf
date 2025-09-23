@@ -76,6 +76,10 @@ resource "aws_security_group_rule" "http_ingress" {
   lifecycle {
     ignore_changes = all
   }
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # ALB
