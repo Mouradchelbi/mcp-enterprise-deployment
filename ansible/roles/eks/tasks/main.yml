@@ -1,9 +1,35 @@
 ---
+- name: Verify kubectl is available
+  command: kubectl version --client
+  register: kubectl_check
+  failed_when: false
+  changed_when: false
+
+- name: Fail if kubectl is not available
+  fail:
+    msg: "kubectl is not available. Please ensure it is installed and in PATH."
+  when: kubectl_check.rc != 0
+
+- name: Verify kubeconfig is configured
+  command: kubectl cluster-info
+  register: cluster_info
+  failed_when: false
+  changed_when: false
+
+- name: Display cluster info
+  debug:
+    msg: "Connected to EKS cluster successfully"
+  when: cluster_info.rc == 0
+
+- name: Create namespace if it doesn't exist
+  command: kubectl create namespace {{ environment }} --dry-run=client -o yaml | kubectl apply -f -
+  changed_when: false
+
 - name: Fetch DB credentials from Secrets Manager
   command: >
-    aws secretsmanager get-secret-value \
-      --secret-id {{ database_secret }} \
-      --region {{ aws_region }}
+    aws secretsmanager get-secret-value
+    --secret-id {{ database_secret }}
+    --region {{ aws_region }}
   register: secret_result
   environment:
     AWS_DEFAULT_REGION: "{{ aws_region }}"
@@ -12,12 +38,45 @@
   set_fact:
     db_credentials: "{{ (secret_result.stdout | from_json).SecretString | from_json }}"
 
+- name: Set database connection URL
+  set_fact:
+    database_url: "postgresql://{{ db_credentials.username }}:{{ db_credentials.password }}@{{ rds_endpoint }}:5432/mcp_server_{{ environment }}"
+    redis_url: "redis://{{ redis_endpoint }}:6379"
+
 - name: Generate EKS deployment manifest
   template:
     src: deployment.yaml.j2
-    dest: /tmp/mcp-server-deployment.yaml
+    dest: /tmp/mcp-server-deployment-{{ environment }}.yaml
+
+- name: Display deployment manifest location
+  debug:
+    msg: "Deployment manifest generated at /tmp/mcp-server-deployment-{{ environment }}.yaml"
 
 - name: Apply EKS deployment
   command: >
-    kubectl apply -f /tmp/mcp-server-deployment.yaml \
-      --namespace {{ environment }}
+    kubectl apply -f /tmp/mcp-server-deployment-{{ environment }}.yaml
+  register: kubectl_apply
+  changed_when: "'created' in kubectl_apply.stdout or 'configured' in kubectl_apply.stdout"
+
+- name: Wait for deployment to be ready
+  command: >
+    kubectl rollout status deployment/mcp-server
+    --namespace {{ environment }}
+    --timeout=5m
+  register: rollout_status
+  changed_when: false
+
+- name: Get service endpoint
+  command: >
+    kubectl get service mcp-server-service
+    --namespace {{ environment }}
+    -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  register: service_endpoint
+  until: service_endpoint.stdout != ""
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Display MCP Server endpoint
+  debug:
+    msg: "MCP Server is available at: {{ service_endpoint.stdout }}:8000"

@@ -6,14 +6,15 @@
   vars:
     environment: "{{ env | default('dev') }}"
     task: "{{ task | default('all') }}"
-    ecr_registry: "{{ lookup('env', 'ECR_REGISTRY') }}"
-    ecr_repository: "{{ lookup('env', 'ECR_REPOSITORY') }}"
-    git_commit: "{{ lookup('env', 'GIT_COMMIT') }}"
-    aws_region: "{{ lookup('env', 'AWS_DEFAULT_REGION') }}"
+    ecr_registry: "{{ ecr_registry | default(lookup('env', 'ECR_REGISTRY')) }}"
+    ecr_repository: "{{ ecr_repository | default(lookup('env', 'ECR_REPOSITORY')) }}"
+    git_commit: "{{ git_commit | default(lookup('env', 'GIT_COMMIT')) }}"
+    aws_region: "{{ aws_region | default(lookup('env', 'AWS_DEFAULT_REGION')) }}"
     rds_endpoint: "{{ rds_endpoint | default('') }}"
     redis_endpoint: "{{ redis_endpoint | default('') }}"
     project_name: "mcp-server"
     cluster_name: "mcp-server-eks-cluster-{{ environment }}"
+    database_secret: "mcp-server-jenkins-ansible-key-{{ environment }}"
     
   tasks:
     - name: Configure Jenkins
@@ -21,123 +22,7 @@
         name: jenkins
       when: task == "jenkins_config" or task == "all"
       
-    - name: Prepare EKS
+    - name: Deploy to EKS
       include_role:
         name: eks
-      vars:
-        database_secret: "mcp-server-jenkins-ansible-key-{{ environment }}"
-      when: task == "prepare_eks" or task == "all"
-
-    - name: Deploy MCP Server to Kubernetes
-      block:
-        - name: Create namespace
-          kubernetes.core.k8s:
-            name: "{{ environment }}"
-            api_version: v1
-            kind: Namespace
-            state: present
-
-        - name: Create database secret
-          kubernetes.core.k8s:
-            definition:
-              apiVersion: v1
-              kind: Secret
-              metadata:
-                name: mcp-server-db-secret
-                namespace: "{{ environment }}"
-              type: Opaque
-              data:
-                database_url: "{{ ('postgresql://username:password@' + rds_endpoint + ':5432/mcp_server_' + environment) | b64encode }}"
-                redis_url: "{{ ('redis://' + redis_endpoint + ':6379') | b64encode }}"
-
-        - name: Deploy MCP Server application
-          kubernetes.core.k8s:
-            definition:
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: mcp-server
-                namespace: "{{ environment }}"
-              spec:
-                replicas: 2
-                selector:
-                  matchLabels:
-                    app: mcp-server
-                template:
-                  metadata:
-                    labels:
-                      app: mcp-server
-                  spec:
-                    containers:
-                    - name: mcp-server
-                      image: "{{ ecr_registry }}/{{ ecr_repository }}:{{ git_commit }}"
-                      ports:
-                      - containerPort: 8000
-                      env:
-                      - name: DATABASE_URL
-                        valueFrom:
-                          secretKeyRef:
-                            name: mcp-server-db-secret
-                            key: database_url
-                      - name: REDIS_URL
-                        valueFrom:
-                          secretKeyRef:
-                            name: mcp-server-db-secret
-                            key: redis_url
-                      - name: ENVIRONMENT
-                        value: "{{ environment }}"
-                      resources:
-                        requests:
-                          memory: "256Mi"
-                          cpu: "250m"
-                        limits:
-                          memory: "512Mi"
-                          cpu: "500m"
-                      readinessProbe:
-                        httpGet:
-                          path: /health
-                          port: 8000
-                        initialDelaySeconds: 30
-                        periodSeconds: 10
-                      livenessProbe:
-                        httpGet:
-                          path: /health
-                          port: 8000
-                        initialDelaySeconds: 60
-                        periodSeconds: 30
-
-        - name: Create MCP Server service
-          kubernetes.core.k8s:
-            definition:
-              apiVersion: v1
-              kind: Service
-              metadata:
-                name: mcp-server-service
-                namespace: "{{ environment }}"
-                annotations:
-                  service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-              spec:
-                selector:
-                  app: mcp-server
-                ports:
-                - port: 8000
-                  targetPort: 8000
-                  protocol: TCP
-                type: LoadBalancer
-
-        - name: Wait for service to get LoadBalancer IP
-          kubernetes.core.k8s_info:
-            api_version: v1
-            kind: Service
-            name: mcp-server-service
-            namespace: "{{ environment }}"
-          register: service_info
-          until: service_info.resources[0].status.loadBalancer.ingress is defined
-          retries: 30
-          delay: 10
-
-        - name: Display service endpoint
-          debug:
-            msg: "MCP Server is available at: {{ service_info.resources[0].status.loadBalancer.ingress[0].hostname }}:8000"
-
       when: task == "prepare_eks" or task == "all"
